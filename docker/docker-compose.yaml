@@ -6,5 +6,5 @@ services:
     image: my-app:${IMAGE_TAG}
     restart: always  # ИСПРАВЛЕНО: правильный параметр для обычного Compose
     ports:
-      - "500-501:5000"
+      - "5000:5000"
 
