@@ -1,0 +1,51 @@
+---
+- name: Настройка VM в Yandex Cloud
+  hosts: web_servers
+  become: yes
+  tasks:
+
+    - name: Обновить кэш apt и установить необходимые пакеты
+      apt:
+        update_cache: yes
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - git
+          - python3-pip
+          - python3-docker
+        state: present
+
+    - name: Установить Docker
+      shell: |
+        curl -fsSL https://get.docker.com -o get-docker.sh # ИСПРАВЛЕНО: добавлен префикс get.
+        sh get-docker.sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Добавить пользователя ubuntu в группу docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Убедиться, что Docker запущен
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Запустить Jenkins в Docker-контейнере
+      community.docker.docker_container: # РЕКОМЕНДУЕТСЯ: полное имя модуля
+        name: jenkins-server
+        image: jenkins/jenkins:lts
+        state: started
+        restart_policy: always
+        published_ports:
+          - "8080:8080"
+          - "50000:50000"
+        volumes:
+          - jenkins_home:/var/jenkins_home
+

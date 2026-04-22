@@ -1,0 +1,14 @@
+
+# Игнорировать все папки .terraform
+**/.terraform/
+
+# Игнорировать файлы состояний (содержат секреты!)
+*.tfstate
+*.tfstate.*
+
+# Игнорировать переменные с секретами
+*.tfvars
+*.tfvars.json
+.terraform/
+*.tfstate*
+key.json
