@@ -37,8 +37,7 @@ resource "yandex_vpc_security_group" "vm-sg" {
 resource "yandex_compute_instance" "vm" {
   name        = "lesson-vm"
   platform_id = "standard-v1"
-  zone        = "ru-central1-a"
-
+  zone        = :var.yc_zone
   resources {
     cores  = 2
     memory = 2
