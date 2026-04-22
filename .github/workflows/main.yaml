@@ -1,0 +1,53 @@
+name: Deploy to Yandex Cloud
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Apply
+        env:
+          YC_SERVICE_ACCOUNT_KEY_FILE: ${{ secrets.YC_KEYS_JSON }}
+        run: |
+          cd terraform
+          echo '${{ secrets.YC_KEYS_JSON }}' > key.json
+          terraform init
+          terraform apply -auto-approve -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+          # Вытягиваем IP и сохраняем в ENV для следующих шагов
+          echo "VM_IP=$(terraform output -raw external_ip_address_vm)" >> $GITHUB_ENV
+
+      - name: Build Docker Image
+        run: |
+          cd docker
+          docker build -t my-app:${{ github.sha }} .
+
+      - name: Health Check (Local)
+        run: |
+          cd docker
+          # Запускаем на порту 5000, как в твоем SG
+          docker run -d --name test-app -p 5000:5000 my-app:${{ github.sha }}
+          sleep 5
+          curl --fail http://localhost:5000/health || (docker logs test-app && exit 1)
+          docker rm -f test-app
+
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.VM_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo apt-get update && sudo apt-get install -y docker-compose
+            # Здесь можно передать команду запуска вашего docker-compose
+            # Или просто запустить образ напрямую для теста:
+            sudo docker run -d -p 5000:5000 --name app my-app:${{ github.sha }}
