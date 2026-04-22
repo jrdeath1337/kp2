@@ -57,17 +57,19 @@ resource "yandex_compute_instance" "vm" {
     security_group_ids = [yandex_vpc_security_group.vm-sg.id]
   }
 
+
+# Добавь переменную в начало или в variables.tf
+variable "ssh_public_key" {
+  type = string
+}
+
+# В ресурсе yandex_compute_instance "vm" измени metadata:
   metadata = {
-    user-data = <<EOF
-#cloud-config
-users:
-  - name: ubuntu
-    groups: sudo
-    shell: /bin/bash
-    sudo: 'ALL=(ALL) NOPASSWD:ALL'
-    ssh_authorized_keys:
-      - ${file("~/.ssh/id_rsa.pub")}
-EOF
+    ssh-keys = "ubuntu:${var.ssh_public_key}"
   }
+
+# Исправь имя ресурса в output (было your_vm, стало vm)
+output "external_ip_address_vm" {
+  value = yandex_compute_instance.vm.network_interface.0.nat_ip_address
 }
 
