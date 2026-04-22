@@ -15,23 +15,20 @@ jobs:
         with:
           terraform_wrapper: false
 
-
       - name: Terraform Apply
-        env:
-          YC_SERVICE_ACCOUNT_KEY_FILE: key.json
         run: |
           cd terraform
-          # Надежный способ записи JSON
           echo '${{ secrets.YC_KEYS_JSON }}' > key.json
-          
           terraform init
           
-          # Запускаем с подробным выводом, если упадет - увидим причину
-          terraform apply -auto-approve -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" || (echo "Terraform failed!" && exit 1)
+          # Добавляем передачу yc_cloud_id и yc_folder_id
+          terraform apply -auto-approve \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+            -var="yc_cloud_id=b1gojnvcqc43rk3ga3js" \
+            -var="yc_folder_id=b1gkcc9dpl1g7jakckh1"
           
-          # Проверяем, что output работает
-          VM_IP=$(terraform output -raw external_ip_address_vm)
-          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          echo "VM_IP=$(terraform output -raw external_ip_address_vm)" >> $GITHUB_ENV
+
 
 
       - name: Build Docker Image
