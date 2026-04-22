@@ -8,51 +8,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
+      # 1. Поднимаем инфраструктуру
       - name: Terraform Apply
         run: |
           cd terraform
           echo '${{ secrets.YC_KEYS_JSON }}' > key.json
           terraform init
-          
-          # Добавляем передачу yc_cloud_id и yc_folder_id
           terraform apply -auto-approve \
             -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
             -var="yc_cloud_id=b1gojnvcqc43rk3ga3js" \
-            -var="yc_folder_id=b1gkcc9dpl1g7jakckh1"
-          
+            -var="yc_folder_id=b1gkcc9dpl1g7jakckh1" \
+            -var="yc_zone=ru-central1-a"
           echo "VM_IP=$(terraform output -raw external_ip_address_vm)" >> $GITHUB_ENV
 
-
-
+      # 2. Собираем образ (нужно делать ДО деплоя)
       - name: Build Docker Image
         run: |
           cd docker
           docker build -t my-app:${{ github.sha }} .
+          # Сохраняем образ в файл, чтобы перекинуть на ВМ (так как у нас нет Registry)
+          docker save my-app:${{ github.sha }} | gzip > my-app.tar.gz
 
+      # 3. Локальный Health Check (проверка билда)
       - name: Health Check (Local)
         run: |
-          cd docker
-          # Запускаем на порту 5000, как в твоем SG
           docker run -d --name test-app -p 5000:5000 my-app:${{ github.sha }}
-          sleep 5
+          sleep 10
           curl --fail http://localhost:5000/health || (docker logs test-app && exit 1)
           docker rm -f test-app
 
+      # 4. Копируем образ на ВМ (потому что ВМ не может его скачать из GitHub)
+      - name: Copy Image to VM
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.VM_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker/my-app.tar.gz,docker/docker-compose.yaml"
+          target: "~/app"
+          strip_components: 1
+
+      # 5. Финальный деплой на ВМ
       - name: Deploy to VM via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.VM_IP }}
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo apt-get update && sudo apt-get install -y docker-compose
-            # Здесь можно передать команду запуска вашего docker-compose
-            # Или просто запустить образ напрямую для теста:
-            sudo docker run -d -p 5000:5000 --name app my-app:${{ github.sha }}
+            sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+            cd ~/app
+            # Загружаем присланный образ в локальный Docker виртуалки
+            gunzip -c my-app.tar.gz | sudo docker load
+            # Запускаем через docker-compose
+            IMAGE_TAG=${{ github.sha }} sudo -E docker-compose up -d
+
