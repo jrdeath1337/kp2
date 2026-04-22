@@ -1,4 +1,3 @@
-
 # 1. Группа безопасности
 resource "yandex_vpc_security_group" "vm-sg" {
   name       = "lesson-sg"
@@ -57,18 +56,16 @@ resource "yandex_compute_instance" "vm" {
     security_group_ids = [yandex_vpc_security_group.vm-sg.id]
   }
 
+  metadata = {
+    ssh-keys = "ubuntu:${var.ssh_public_key}"
+  }
+} # <-- ВОТ ЭТОЙ СКОБКИ НЕ ХВАТАЛО
 
-# Добавь переменную в начало или в variables.tf
+# 3. Переменные и выводы
 variable "ssh_public_key" {
   type = string
 }
 
-# В ресурсе yandex_compute_instance "vm" измени metadata:
-  metadata = {
-    ssh-keys = "ubuntu:${var.ssh_public_key}"
-  }
-
-# Исправь имя ресурса в output (было your_vm, стало vm)
 output "external_ip_address_vm" {
   value = yandex_compute_instance.vm.network_interface.0.nat_ip_address
 }
